@@ -10,6 +10,8 @@
 
 网络课程参考：中国大学MOOC——计算机系统基础（四）：编程与调试实践
 
+[TOC]
+
 ### 修改ELF文件的工具：hexedit
 
 安装：`sudo apt-get install hexedit`
@@ -54,7 +56,7 @@ ddURHzFnm2mcxbehqVcVufpd68LdEePs	lYPCnZfPLLbMLzV3iM1A97QVLg7j8zcmDlD0clCtKV0kgLR
 
 不急着分析这个奇怪的字符串，我们先来研究一下从哪里可以找到这串东西，以此来粗略理解一下链接的原理。接下来我们会用多种方式来寻找这个字符串。
 
-#### 方法1
+#### 方式1
 
 反汇编一下刚刚链接生成的可执行程序lb1（`objdump -d lb1 > lb1.s`），发现do_phase函数做了这些事：
 
@@ -69,7 +71,7 @@ ddURHzFnm2mcxbehqVcVufpd68LdEePs	lYPCnZfPLLbMLzV3iM1A97QVLg7j8zcmDlD0clCtKV0kgLR
  80491b1:	e8 7a fe ff ff       	call   8049030
 ```
 
-最后的call的0x8049030是函数puts，先不去管它，我们来看`push %eax`把啥东西存到栈里去了：
+最后的call的0x8049030是函数puts，先不去管它，我们来看`push %eax`把啥东西存到栈里去了（`gdb lb1`）：
 
 ```
 (gdb) x /s 0x804c0da
@@ -78,13 +80,13 @@ ddURHzFnm2mcxbehqVcVufpd68LdEePs	lYPCnZfPLLbMLzV3iM1A97QVLg7j8zcmDlD0clCtKV0kgLR
 
 这样，我们大概知道phase1的代码干了这样一件事：调用puts函数，打印这个奇怪的字符串。
 
-#### 方法2
+#### 方式2
 
 用hexedit查看phase1.o，我们可以直接用肉眼找到那个奇怪的字符串：
 
 ![p1_origin_output](figures/p1_origin_output.JPG)
 
-#### 方法3
+#### 方式3
 
 接下来我们从链接与符号解析的角度来找这个字符串。我们先反汇编一下phase1.o（`objdump -d phase1.o > phase1.s`），看看链接之前的do_phase函数：
 
@@ -132,7 +134,7 @@ Relocation section '.rel.eh_frame' at offset 0x374 contains 1 entry:
 00000020  00000202 R_386_PC32        00000000   .text
 ```
 
-我们知道，数据节中引用对应的重定位条目在.rel.data节中，代码节中引用对应的重定位条目在.rel.text节中。我们所提出的两个问题都源于代码节中，因此我们只需要关注重定位信息表的.rel.text节。这个节里有两个表项，一个是puts，一个是.data。正好对应我们提出的两个疑问。我们接下来只对链接之前的文件进行分析，所以重定位表中的信息只是用来定位符号，而不是用来对重定位的过程进行分析（重定位的过程会在phase5中提及，这里不会涉及到）。
+我们知道，.data节（数据节）中引用对应的重定位条目在.rel.data节中，.text节（代码节）中引用对应的重定位条目在.rel.text节中。我们所提出的两个问题都源于.text节中，因此我们只需要关注重定位信息表的.rel.text节。这个节里有两个表项，一个是puts，一个是.data。正好对应我们提出的两个疑问。我们接下来只对链接之前的文件进行分析，所以重定位表中的信息只是用来定位符号，而不是用来对重定位的过程进行分析（重定位的过程会在phase5中提及，这里不会涉及到）。
 
 我们看Offset列。在.rel.text部分，Offset指的是相对.text节的偏移量。我们结合puts和.data两个表项来进行具体说明。
 
@@ -150,7 +152,7 @@ f:	e8 fc ff ff ff       	call   10 <do_phase+0x10>
 6:	b8 9a 00 00 00       	mov    $0x9a,%eax
 ```
 
-从偏移量为0x7起的四个字节，所表示的数是0x9a。所以此处表示的实际地址是0x9a加上重定位表项.data的偏移地址。`readelf -S phase1.o`，我们来看一下节头表。我们发现.data节在phase1.o中的偏移量为0x60：
+从偏移量为0x7起的四个字节，所表示的数是0x9a。所以此处表示的实际地址是0x9a加上重定位符号.data的偏移地址。`readelf -S phase1.o`，我们来看一下节头表。我们发现.data节在phase1.o中的偏移量（Off列）为0x60：
 
 ```
 There are 14 section headers, starting at offset 0x3e0:
@@ -178,9 +180,9 @@ Key to Flags:
   p (processor specific)
 ```
 
-所以此处表示的实际地址为0x60+0x9a=0xfa。我们回头看方法2中的图片，发现那个我们打印出来的东西的起始位置正好是0xfa，定位成功。
+所以此处表示的实际地址为0x60+0x9a=0xfa。我们回头看方式2中的图片，发现那个我们打印出来的东西的起始位置正好是0xfa，定位成功。
 
-#### 方法4
+#### 方式4
 
 
 这次我们来看符号表（`readelf -s phase1.o`），我们只需要关注.data节中的符号，即（Ndx=3）的表项：
@@ -206,7 +208,7 @@ Symbol table '.symtab' contains 16 entries:
     15: 00000160     4 OBJECT  GLOBAL DEFAULT    3 phase
 ```
 
-在方法3中，我们从节头表里发现.data节在phase1.o文件中的偏移量为0x60。结合上面的符号表我们得知：
+在方式3中，我们从节头表里发现.data节在phase1.o文件中的偏移量为0x60。结合上面的符号表我们得知：
 
 | 属于.data节的符号名 | 在.data节中的偏移量（Value） | 大小（Size） | 在phase1.o中的位置 |
 | ------------------- | ---------------------------- | ------------ | ------------------ |
@@ -214,7 +216,9 @@ Symbol table '.symtab' contains 16 entries:
 | tqdzfNje            | 0x80                         | 0xdf         | 0xe0-0x1be         |
 | uJGbRo              | 0x15f                        | 0x1          | 0x1bf              |
 
-我们再来看方法1打印出来的东西：
+以符号tqdzfNje为例，我们解释一下这张表格中的数据是如何得到的。我们可以根据符号表中的Value列得知该符号在.data节中的偏移量。再根据Size列又能得知该符号的大小，即它所占的字节数。符号表中Size列的值是以十进制的形式表示的，我们把它写成十六进制看起来更方便。在phase1.o中，该符号的首地址是该符号在.data节中的偏移量加上.data节在phase1.o中的偏移量。所以对于符号tqdzfNje而言，它在phase1.o中的首地址即0x80+0x60=0xe0。又因为该符号的大小为0xdf，所以它在phase1.o中的位置就是从0xe0开始的0xdf个字节，即0xe0-0x1be。
+
+我们再来看方式1打印出来的东西：
 
 ```
 (gdb) x /s 0x804c0da
@@ -227,7 +231,7 @@ Symbol table '.symtab' contains 16 entries:
 
 
 
-研究完这么多找那个奇怪字符串的方法，我们大致对链接的原理和符号解析有了一些概念，然后就可以开始解决phase1了。从打印出来的那个字符串的第一个字符开始，逐个修改学号每个数字对应的字符，最后加上00作为结束符，就完成了。
+研究完这么多找那个奇怪字符串的方式，我们大致对链接的原理和符号解析有了一些概念，然后就可以开始解决phase1了。从打印出来的那个字符串的第一个字符开始，逐个修改学号每个数字对应的字符，最后加上00作为结束符，就完成了。
 
 ![solution1](figures/solution1.JPG)
 
@@ -278,7 +282,7 @@ Symbol table '.symtab' contains 16 entries:
  8049298:	c3                   	ret  
 ```
 
-经过一通gdb，我们发现0x804c028这个地址上存放的是do_phase函数的地址0x8049253。也就是说，main函数会调用do_phase函数，然后jmp跳过下面的call puts，直接return。所以如果尝试`./lb2`，我们会发现这个程序啥也没打印。
+经过一通gdb（`gdb lb2`），我们发现0x804c028这个地址上存放的是do_phase函数的地址0x8049253。也就是说，main函数会调用do_phase函数，然后jmp跳过下面的call puts，直接return。所以如果尝试`./lb2`，我们会发现这个程序啥也没打印。
 
 分析完程序大体上的流程，我们开始着手解题。
 
@@ -354,13 +358,13 @@ Symbol table '.symtab' contains 17 entries:
     16: 00000004     4 OBJECT  GLOBAL DEFAULT    3 phase
 ```
 
-与phase1中的计算方法相同，我们很快能定位到do_phase函数在phase2.o中的位置（0x34+0x91=0xc5）。
+与phase1中方式4的计算方法相同，我们很快能定位到do_phase函数在phase2.o中的位置（0x34+0x91=0xc5）。
 
 `hexedit phase2.o`：
 
 ![p2_dophase](figures/p2_dophase.JPG)
 
-因为攻击代码需要对main函数的栈帧进行操作，所以do_phase函数中保存%ebp旧值（main函数中%ebp的值）的代码是没有必要的，所以我们的攻击代码会把上图中选中的字节码也覆盖掉。
+因为攻击代码需要对main函数的栈帧进行操作，所以do_phase函数中保存%ebp旧值（main函数中%ebp的值）的代码是没有必要的，所以我们的攻击代码会把上图中选中的字节也覆盖掉。
 
 现在我们用gdb调试，观察一下call do_phase之前的栈帧情况：
 
@@ -439,7 +443,7 @@ push   %ebp          # original do_phase here
 mov    %esp,%ebp
 ```
 
-写完后保存并退出，然后`gcc -c a2_main.s`，`objdump -d a2_main.o`，得到攻击指令的字节码：
+写完后保存并退出，然后`gcc -c a2_main.s`，`objdump -d a2_main.o`，得到攻击指令的机器码：
 
 ```
 a2_main.o:     file format elf32-i386
@@ -551,7 +555,7 @@ phase2.o里面除了do_phase函数外，还有几个有着奇怪函数名的函�
 
 在写攻击代码之前还有最后一个问题：怎么call kfSvKnbh？我们不能把链接后的kfSvKnbh函数的地址写进攻击代码，因为链接后的该函数的地址是对phase2.o中call的操作数进行重定位而得到的，而这个call的操作数怎么填写正是我们现在正在探讨的问题。
 
-我们必须call这个函数的相对地址。 **相对地址=kfSvKnbh函数的地址-call指令的下一条指令的地址。**但这个“call指令的下一条指令的地址”我们暂时确定不了，所以我们给call指令的操作数先随便写个值（只要保证call操作数的字节码大小为4字节即可），把攻击代码写完之后再用hexedit调整这个值。
+我们必须call这个函数的相对地址。 **相对地址=kfSvKnbh函数的地址-call指令的下一条指令的地址。** 但这个“call指令的下一条指令的地址”我们暂时确定不了，所以我们给call指令的操作数先随便写个值（只要保证call操作数的机器码大小为4字节即可），把攻击代码写完之后再用hexedit调整这个值。
 
 ```
 a2c.o:     file format elf32-i386
@@ -573,7 +577,7 @@ Disassembly of section .text:
   21:	89 ec                	mov    %ebp,%esp
 ```
 
-把这些攻击指令字节码填到phase2.o里，然后`objdump -d phase2.o`（注：我们这次的攻击代码不覆盖do_phase中保存%ebp旧值的指令）：
+把这些攻击指令机器码填到phase2.o里，然后`objdump -d phase2.o`（注：我们这次的攻击代码不覆盖do_phase中保存%ebp旧值的指令）：
 
 ![a2c1](figures/a2c1.JPG)
 
@@ -788,7 +792,7 @@ $1 = 0x79
 char NQqPQyqUth[256];
 void do_phase() {
   int i = 0;
-  char cookie[10] = {0x79,0x7a,0x67,0x69,0x75,0x68,0x6e,0x62,0x65};
+  char cookie[10] = {0x79,0x7a,0x67,0x69,0x75,0x68,0x6e,0x62,0x65,'\0'};
   for (; i <= 8; ++i) putchar(NQqPQyqUth[cookie[i]]);
   putchar('\n');
 }
@@ -867,9 +871,9 @@ Symbol table '.symtab' contains 8 entries:
      7: 00000000   256 OBJECT  GLOBAL DEFAULT    2 NQqPQyqUth
 ```
 
-好了，现在我们知道，.data节在phase3_patch.o中的偏移量为0x40，符号NQqPQyqUth在.data节中的偏移量为0x0。所以符号NQqPQyqUth在phase3_patch.o中的偏移量为0x40。又因为符号NQqPQyqUth的大小为256（0x100），所以它的内容在位置0x40\~0x13f上。
+好了，现在我们知道，.data节在phase3_patch.o中的偏移量为0x40，符号NQqPQyqUth在.data节中的偏移量为0x0。所以符号NQqPQyqUth在phase3_patch.o中的偏移量为0x40+0x0=0x40。又因为符号NQqPQyqUth的大小为256（0x100），所以它的内容在位置0x40\~0x13f上。
 
-`hexedit phase_patch.o`。因为我们给这个强符号赋的初值为字符串"1"，所以位置0x40上的值是31，其余255个位置的值上都是0：
+`hexedit phase3_patch.o`。因为我们给这个强符号赋的初值为字符串"1"，所以位置0x40上的值是31，其余255个位置的值上都是0：
 
 ```
 00000040   31 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00  1...............
@@ -980,7 +984,7 @@ Symbol table '.symtab' contains 8 entries:
 void do_phase() {
   char data;
   int i = 0;
-  char cookie[10] = {0x53,0x4e,0x58,0x47,0x4a,0x54,0x43,0x46,0x50};
+  char cookie[10] = {0x53,0x4e,0x58,0x47,0x4a,0x54,0x43,0x46,0x50,'\0'};
   char output[10];
   for (; i <= 8; ++i) {
     switch(cookie[i]-0x41){
@@ -1035,7 +1039,7 @@ void do_phase() {
 
 这下我们完全明白这个函数的执行过程了。举个例子来说明：比如第8次循环的时候，取cookie[7]=0x46。然后switch(0x46-0x41)，执行case 5。如何跳转到case 5呢？我们看到跳转表的首地址是0x804a188，0x804a188+4*0x5=0x804a119c。所以我们取地址0x804a119c上的值0x08049221，jmp到这里继续执行。这里就是case 5要执行的代码。
 
-接下来开始着手解决phase4。因为这个阶段不允许修改.text节和重定位节的内容，所以我们只能从修改跳转表的角度考虑。开关语句的跳转表是存放在节.rodata节（只读数据节）的。
+接下来开始着手解决phase4。因为这个阶段不允许修改.text节和重定位节的内容，所以我们只能从修改跳转表的角度考虑。开关语句的跳转表是存放在.rodata节（只读数据节）的。
 
 `readelf -S phase4.o`，我们发现.rodata节的偏移量是0x1d8：
 
@@ -1176,25 +1180,25 @@ Relocation section '.rel.text' at offset 0x7f8 contains 23 entries:
 00000066  00000d01 R_386_32          00000020   yAnKQn
 00000075  00000501 R_386_32          00000000   .rodata
 00000086  00000d01 R_386_32          00000020   yAnKQn
-00000000  00000000 R_386_NONE       																	  	# need modification
-00000000  00000000 R_386_NONE       																		  # need modification
+00000000  00000000 R_386_NONE       											     # need modification
+00000000  00000000 R_386_NONE       										       # need modification
 000000bd  00000d01 R_386_32          00000020   yAnKQn
 000000cc  00000d01 R_386_32          00000020   yAnKQn
-00000000  00000000 R_386_NONE       																		  # need modification
+00000000  00000000 R_386_NONE       										       # need modification
 000000f9  00000e01 R_386_32          0000010c   aQSEth
 00000107  00000e01 R_386_32          0000010c   aQSEth
-00000000  00000000 R_386_NONE       																		  # need modification
+00000000  00000000 R_386_NONE       									         # need modification
 00000118  00000e01 R_386_32          0000010c   aQSEth
 00000138  00001302 R_386_PC32        00000000   strlen
-00000000  00000000 R_386_NONE       																		  # need modification
+00000000  00000000 R_386_NONE       									         # need modification
 00000162  00000e01 R_386_32          0000010c   aQSEth
 000001c0  00001302 R_386_PC32        00000000   strlen
 000001e4  00001101 R_386_32          00000080   AycPNh
 000001ea  00000e01 R_386_32          0000010c   aQSEth
 00000246  00001002 R_386_PC32        000000ef   generate_code
-00000000  00000000 R_386_NONE       																		  # need modification
+00000000  00000000 R_386_NONE       												   # need modification
 00000256  00000c01 R_386_32          00000100   tqdzfNje
-00000000  00000000 R_386_NONE       																		  # need modification
+00000000  00000000 R_386_NONE       											     # need modification
 00000268  00001702 R_386_PC32        00000000   puts
 
 Relocation section '.rel.data' at offset 0x8b0 contains 4 entries:
@@ -1253,7 +1257,7 @@ Section Headers:
 
 这说明符号yAnKQn属于.rodata节。从节头表中可以看出.rodata节在phase5.o中的偏移量为0x3e0，大小为0x100。而符号yAnKQn在.rodata节中的偏移量（Sym.Value）为0x20，所以符号yAnKQn在phase5.o节中的偏移量为0x3e0+0x20=0x400。当使用hexedit修改phase5.o中的内容时，如果我们需要修改符号yAnKQn的内容，那么我们直接到偏移量为0x400的地方进行修改，就可以了。
 
-现在我们已经把三张表的信息都关联起来了。我们回到重定位表，继续分析符号yAnKQn的重定位信息。来看这个符号的Info值0x00000d01。Info包含了两部分信息，一部分是它的高24位，表示这个符号的索引。对于符号yAnKQn来说，它的索引就是0xd。我们到符号表中看Num列，符号yAnKQn的Num值 为13（0xd），即它的符号索引值。Info的另一部分信息是它的低8位，表示该符号的重定位类型。对于符号yAnKQn来说，它的重定位类型（重定位表中的Type列）是R_386_32。
+现在我们已经把三张表的信息都关联起来了。我们回到重定位表，继续分析符号yAnKQn的重定位信息。来看这个符号的Info值0x00000d01：Info包含了两部分信息，一部分是它的高24位，表示这个符号的索引。对于符号yAnKQn来说，它的索引就是0xd。我们到符号表中看Num列，符号yAnKQn的Num值 为13（0xd），即它的符号索引值。Info的另一部分信息是它的低8位，表示该符号的重定位类型。对于符号yAnKQn来说，它的重定位类型（重定位表中的Type列）是R_386_32。
 
 最后来看重定位表中的Offset列。Offset是需要被修改的引用的节偏移。对于符号yAnKQn，它的Offset为0x66，它是被.text节被引用的（因为这个表项在重定位表的.rel.text节）。`objdump -d phase5.o > phase5.s`，我们找到偏移量为0x66的字节所在的指令：
 
@@ -1326,7 +1330,7 @@ void generate_code(int cookie) {
 10f:	e8 fc ff ff ff       	call   110 <generate_code+0x21>
 ```
 
-现在我们知道，我们要重定位的是transform_code函数。它的Offset为0x110。我们到符号表中寻找符号transform_code，发现它的Num为15（0xf），所以它在重定位表中的Info值的高24位为0x00000f。根据机器字节码我们知道，该函数的重定位类型为R_386_PC32，所以它在重定位表中的Info值的低8位为0x02。`hexedit phase5.o`填写如下：
+现在我们知道，我们要重定位的是transform_code函数。它的Offset为0x110。我们到符号表中寻找符号transform_code，发现它的Num为15（0xf），所以它在重定位表中的Info值的高24位为0x00000f。根据汇编机器码，我们发现call指令的操作数为负数。在我们已知的重定位类型中，该函数的重定位类型只可能是R_386_PC32，所以它在重定位表中的Info值的低8位为0x02。`hexedit phase5.o`填写如下：
 
 ```
 00000848   10 01 00 00  02 0F 00 00  ........
@@ -1364,7 +1368,7 @@ Relocation section '.rel.text' at offset 0x7f8 contains 23 entries:
 >
 > ->到phase5.s的encode_1函数的对应位置找与刚刚那条指令一模一样的指令
 >
-> ->根据找到指令的机器字节码确定缺失表项的Offset
+> ->根据找到的指令在.text节的偏移量确定缺失表项的Offset
 
 #### part4
 
@@ -1380,7 +1384,7 @@ void do_phase() {
 }
 ```
 
-再看一下do_phase函数：
+再看一下phase5.s里的do_phase函数部分：
 
 ```assembly
 0000023a <do_phase>:
@@ -1411,7 +1415,7 @@ void do_phase() {
 000008A0   63 02 00 00  01 0C 00 00  c.......
 ```
 
-#### 修改结果
+#### 复原效果
 
 重定位表全部填完之后，`objdump -r phase5.o`，我们看一下复原之后的重定位表：
 
@@ -1453,7 +1457,7 @@ UuUHH[[!?
 
 emm这个字符串果然很奇怪。
 
-#### \*重定位的具体过程
+#### *重定位的具体过程
 
 既然这个阶段是针对重定位的，那么我们就来分析分析重定位到底是个什么样的过程。
 
@@ -1474,7 +1478,7 @@ Relocation section '.rel.text' at offset 0x7f8 contains 23 entries:
 80493f7:	e8 a5 fe ff ff       	call   80492a1 <generate_code>
 ```
 
-因为我们分析的是.text节，所以重定位修改的当然是.text节的内容。我们发现call指令的操作数在重定位的过程中从-0x4（0xfffffffc）变成了-0x15b（0xfffffea5）。这个-0x15b是怎么计算出来的呢？
+因为我们分析的是.rel.text节，所以重定位修改的当然是.text节的内容。我们发现call指令的操作数在重定位的过程中从-0x4（0xfffffffc）变成了-0x15b（0xfffffea5）。这个-0x15b是怎么计算出来的呢？
 
 想知道如何计算，先要知道计算方法。我们查看重定位表，发现generate_code的重定位类型为R_386_PC32，它是以PC相对地址的方式进行重定位的。计算公式如下：
 
@@ -1678,7 +1682,7 @@ Key to Flags:
   27:	c7 02 02 00 00 00    	movl   $0x2,(%edx)
 ```
 
-我们先来看第一次内存引用，这里又双叒叕有一个重定位，而且还是我们没见过的重定位类型：R_386_GOT32X。R_386_GOT32X类型会计算GOT的地址与符号的GOT项之间的距离。对于这两条mov指令而言，%eax保存着GOT的地址，%eax+0x0（0x0重定位之后会变成另外一个值）是符号ccc的GOT表项的地址。然后对%eax+0x0进行内存引用，引用该地址上的表项的内容。而表项的内容是符号ccc的地址，所以赋给%edx的是符号ccc的地址。最后把立即数0x2赋值到符号ccc的地址上，赋值就完成了。
+我们先来看全局符号的第一次内存引用，这里又双叒叕有一个重定位，而且还是我们没见过的重定位类型：R_386_GOT32X。R_386_GOT32X类型会计算GOT的地址与符号的GOT项之间的距离。对于这两条mov指令而言，%eax保存着GOT的地址，%eax+0x0（0x0重定位之后会变成另外一个值）是符号ccc的GOT表项的地址。然后对%eax+0x0进行内存引用，引用该地址上的表项的内容。而表项的内容是符号ccc的地址，所以赋给%edx的是符号ccc的地址。接下来的第二次内存引用把立即数0x2赋值到符号ccc的地址上，赋值就完成了。
 
 符号ddd和符号ccc是一样的，我们就不再加以描述了。分析完自己编写的样例，我们大概对位置无关代码和GOT有了一定的了解，这样就可以开始着手解决phase6了。
 
@@ -1879,7 +1883,7 @@ Relocation section '.rel.text' at offset 0x9e0 contains 35 entries:
 00000A48   19 01 00 00  0A 1A 00 00  ........
 ```
 
-剩下的空都是phase5里的重定位信息。我们到phase6.s里确定Offset，然后直接填写。
+剩下的空都与phase5里的重定位信息类似。我们到phase6.s里确定Offset，然后直接填写。
 
 switch跳转表部分：
 
