@@ -445,7 +445,7 @@ mov    %esp,%ebp
 
 写完后保存并退出，然后`gcc -c a2_main.s`，`objdump -d a2_main.o`，得到攻击指令的机器码：
 
-```
+```assembly
 a2_main.o:     file format elf32-i386
 
 
@@ -557,7 +557,7 @@ phase2.o里面除了do_phase函数外，还有几个有着奇怪函数名的函�
 
 我们必须call这个函数的相对地址。 **相对地址=kfSvKnbh函数的地址-call指令的下一条指令的地址。** 但这个“call指令的下一条指令的地址”我们暂时确定不了，所以我们给call指令的操作数先随便写个值（只要保证call操作数的机器码大小为4字节即可），把攻击代码写完之后再用hexedit调整这个值。
 
-```
+```assembly
 a2c.o:     file format elf32-i386
 
 
@@ -609,7 +609,7 @@ Disassembly of section .text:
 然后就能call kfSvKnbh了（`objdump -d phase2.o`）：
 
 
-```
+```assembly
 00000091 <do_phase>:
   91:	55                   	push   %ebp
   92:	89 e5                	mov    %esp,%ebp
@@ -637,7 +637,7 @@ Disassembly of section .text:
 
 写攻击代码的过程和方法2大同小异。jmp指令的操作数和call一样，都是相对地址，所以确定jmp操作数的方法与方法2里确定call操作数的方法一模一样。这里我们直接展示hexedit完之后的phase2.o反汇编的结果：
 
-```
+```assembly
   84:	e8 fc ff ff ff       	call   85 <kfSvKnbh+0x24>
   89:	83 c4 10             	add    $0x10,%esp
   8c:	eb 01                	jmp    8f <kfSvKnbh+0x2e>
@@ -1261,7 +1261,7 @@ Section Headers:
 
 最后来看重定位表中的Offset列。Offset是需要被修改的引用的节偏移。对于符号yAnKQn，它的Offset为0x66，它是被.text节被引用的（因为这个条目在重定位表的.rel.text节）。`objdump -d phase5.o > phase5.s`，我们找到偏移量为0x66的字节所在的指令：
 
-```
+```assembly
   63:	8b 04 85 00 00 00 00 	mov    0x0(,%eax,4),%eax
 ```
 
@@ -1449,7 +1449,7 @@ Relocation section '.rel.text' at offset 0x7f8 contains 23 entries:
 
 链接一下，我们来看看打印出来是什么。
 
-```
+```bash
 linux> gcc -no-pie -o lb5 main.o phase5.o
 linux> ./lb5
 UuUHH[[!?
@@ -1939,7 +1939,7 @@ Relocation section '.rel.text' at offset 0x9e0 contains 35 entries:
 
 满怀好奇地看一下这次打印出来的是什么奇怪的字符串：
 
-```
+```bash
 linux> gcc -no-pie -o lb6 main.o phase6.o
 linux> ./lb6
 a*aTTgg-K
